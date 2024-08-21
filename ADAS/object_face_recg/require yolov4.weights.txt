@@ -1,0 +1,3 @@
+https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=https://github.com/AlexeyAB/darknet/releases/download/darknet_yolo_v3_optimal/yolov4.weights&ved=2ahUKEwi5z8umpIOIAxUJzDgGHW9KAG8QFnoECAgQAQ&usg=AOvVaw30if4joxtTaS8DAh12vYQ4
+
+yolov4.weights
