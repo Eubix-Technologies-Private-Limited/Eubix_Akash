@@ -1,7 +1,6 @@
 import cv2
 import numpy as np
-import face_recognition
-import pickle
+from threading import Thread
 
 # Load YOLOv4
 net = cv2.dnn.readNet("yolov4.weights", "yolov4.cfg")
@@ -10,11 +9,8 @@ net = cv2.dnn.readNet("yolov4.weights", "yolov4.cfg")
 with open("coco.names", "r") as f:
     class_names = [line.strip() for line in f.readlines()]
 
-# Load face encodings and names from the saved file
-with open("encodings.pkl", "rb") as f:
-    data = pickle.load(f)
-    known_face_encodings = data["encodings"]
-    known_face_names = data["names"]
+# Load Haar Cascade for face detection (which uses AdaBoost)
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
 layer_names = net.getLayerNames()
 out_layer_indices = net.getUnconnectedOutLayers()
@@ -22,6 +18,25 @@ if isinstance(out_layer_indices[0], list):
     out_layer_indices = [i[0] for i in out_layer_indices]
 output_layers = [layer_names[i - 1] for i in out_layer_indices]
 
+# Capture frame in a separate thread to prevent lag
+class VideoStream:
+    def __init__(self, src=0):
+        self.cap = cv2.VideoCapture(src)
+        self.ret = False
+        self.frame = None
+        self.thread = Thread(target=self.update, args=())
+        self.thread.daemon = True
+        self.thread.start()
+
+    def update(self):
+        while True:
+            self.ret, self.frame = self.cap.read()
+
+    def read(self):
+        return self.ret, self.frame
+
+    def release(self):
+        self.cap.release()
 
 def detect_objects(frame):
     height, width, _ = frame.shape
@@ -62,63 +77,60 @@ def detect_objects(frame):
             label = f"{class_names[class_ids[i]]}: {confidences[i]:.2f}"
             
             if class_names[class_ids[i]] == "person":
-                face_image = frame[y:y+h, x:x+w]
+                person_image = frame[y:y+h, x:x+w]
                 
-                if face_image.size == 0:
-                    print(f"Warning: Detected face image is empty at coordinates ({x}, {y}, {w}, {h})")
+                if person_image.size == 0:
+                    print(f"Warning: Detected person image is empty at coordinates ({x}, {y}, {w}, {h})")
                     continue
 
-                # Ensure face_image is in the correct format
-                face_image_rgb = cv2.cvtColor(face_image, cv2.COLOR_BGR2RGB)
-                
-                # Detect face locations
-                face_locations = face_recognition.face_locations(face_image_rgb)
-                
-                if face_locations:
-                    # Compute face encodings
-                    face_encodings = face_recognition.face_encodings(face_image_rgb, face_locations)
-                    
-                    if face_encodings:
-                        face_encoding = face_encodings[0]
-                        matches = face_recognition.compare_faces(known_face_encodings, face_encoding)
-                        face_distances = face_recognition.face_distance(known_face_encodings, face_encoding)
-                        best_match_index = np.argmin(face_distances)
+                gray_person_image = cv2.cvtColor(person_image, cv2.COLOR_BGR2GRAY)
 
-                        if matches[best_match_index]:
-                            name = known_face_names[best_match_index]
-                        else:
-                            name = "unknown person"
-                        
-                        label = f"{name}: {confidences[i]:.2f}"
-                    else:
-                        label = "unknown person: 0.00"
-                else:
-                    label = "unknown person: 0.00"
+                # Detect faces using Haar Cascades with AdaBoost
+                faces = face_cascade.detectMultiScale(
+                    gray_person_image,
+                    scaleFactor=1.1,
+                    minNeighbors=5,
+                    minSize=(30, 30)
+                )
+
+                for (fx, fy, fw, fh) in faces:
+                    cv2.rectangle(person_image, (fx, fy), (fx+fw, fy+fh), (255, 0, 0), 2)
+                    cv2.putText(person_image, "Face", (fx, fy-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
             
             cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
             cv2.putText(frame, label, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
     
     return frame
 
+# Open webcam using the VideoStream class
+stream = VideoStream(0)
 
-# Open webcam
-cap = cv2.VideoCapture(0)
+frame_count = 0
+skip_frames = 2  # Perform face detection every 2 frames
 
-while cap.isOpened():
-    ret, frame = cap.read()
+while True:
+    ret, frame = stream.read()
     if not ret:
         break
 
-    # Perform object detection
-    detected_frame = detect_objects(frame)
+    frame_count += 1
+
+    # Resize frame to speed up processing
+    small_frame = cv2.resize(frame, (640, 480))
     
+    if frame_count % skip_frames == 0:
+        # Perform object detection and face detection
+        detected_frame = detect_objects(small_frame)
+    else:
+        detected_frame = small_frame
+
     # Display the result
-    cv2.imshow('YOLOv4 Object Detection', detected_frame)
+    cv2.imshow('YOLOv4 + Haar Cascade Face Detection (AdaBoost)', detected_frame)
     
     # Exit if 'q' is pressed
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
 # Release resources
-cap.release()
+stream.release()
 cv2.destroyAllWindows()
