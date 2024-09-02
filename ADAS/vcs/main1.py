@@ -1,11 +1,7 @@
 import cv2
 import numpy as np
 import time
-import winsound
-# Set frequency to 2000 Hertz
-frequency = 2000  
-# Set duration to 1500 milliseconds (1.5 seconds)
-duration = 1500  
+ 
 
 # Load pre-trained MobileNet SSD model and prototxt file
 net = cv2.dnn.readNetFromCaffe('MobileNetSSD_deploy.prototxt', 'MobileNetSSD_deploy.caffemodel')
