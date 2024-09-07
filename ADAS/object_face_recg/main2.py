@@ -5,7 +5,7 @@ import os
 import pickle
 
 # Load YOLOv4
-net = cv2.dnn.readNet("yolov4.weights", "yolov4.cfg")
+net = cv2.dnn.readNet("yolov7-tiny.weights", "yolov7-tiny.cfg")
 
 # Load the COCO class labels
 with open("coco.names", "r") as f:

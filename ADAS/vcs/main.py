@@ -6,7 +6,7 @@ import time
 net = cv2.dnn.readNetFromCaffe('MobileNetSSD_deploy.prototxt', 'MobileNetSSD_deploy.caffemodel')
 
 # Initialize camera
-camera = cv2.VideoCapture(1)
+camera = cv2.VideoCapture('dashcam.mp4')
 time.sleep(2.0)
 
 CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
